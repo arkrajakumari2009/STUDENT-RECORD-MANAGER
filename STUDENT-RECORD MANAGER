@@ -1,0 +1,222 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#define MAX_STUDENTS 100
+#define NAME_LENGTH 50
+#define DATA_FILE "students.dat"
+
+typedef struct {
+    int roll_number;
+    char name[NAME_LENGTH];
+    float marks;
+} Student;
+
+Student students[MAX_STUDENTS];
+int student_count = 0;
+
+static void discard_input_line(void) {
+    int ch;
+    while ((ch = getchar()) != '\n' && ch != EOF) {
+        /* Clear the rest of the input line. */
+    }
+}
+
+static int find_student_index(int roll_number) {
+    for (int i = 0; i < student_count; i++) {
+        if (students[i].roll_number == roll_number) return i;
+    }
+    return -1;
+}
+
+static void load_students(void) {
+    FILE *file = fopen(DATA_FILE, "rb");
+    if (file == NULL) return; /* First run: no saved file yet. */
+
+    size_t count = fread(students, sizeof(Student), MAX_STUDENTS, file);
+    student_count = (int)count;
+    fclose(file);
+}
+
+static int save_students(void) {
+    FILE *file = fopen(DATA_FILE, "wb");
+    if (file == NULL) {
+        printf("Error: could not save records to %s.\n", DATA_FILE);
+        return 0;
+    }
+
+    size_t written = fwrite(students, sizeof(Student), (size_t)student_count, file);
+    fclose(file);
+    if (written != (size_t)student_count) {
+        printf("Error: not all records were saved.\n");
+        return 0;
+    }
+    return 1;
+}
+
+static void add_student(void) {
+    Student student;
+    if (student_count >= MAX_STUDENTS) {
+        printf("Student list is full (maximum %d).\n", MAX_STUDENTS);
+        return;
+    }
+
+    printf("Enter roll number: ");
+    if (scanf("%d", &student.roll_number) != 1 || student.roll_number <= 0) {
+        printf("Please enter a positive whole number.\n");
+        discard_input_line();
+        return;
+    }
+    discard_input_line();
+    if (find_student_index(student.roll_number) != -1) {
+        printf("That roll number already exists.\n");
+        return;
+    }
+
+    printf("Enter student name: ");
+    if (fgets(student.name, sizeof(student.name), stdin) == NULL) return;
+    student.name[strcspn(student.name, "\n")] = '\0';
+    if (student.name[0] == '\0') {
+        printf("Name cannot be empty.\n");
+        return;
+    }
+
+    printf("Enter marks (0-100): ");
+    if (scanf("%f", &student.marks) != 1 || student.marks < 0 || student.marks > 100) {
+        printf("Please enter a mark from 0 to 100.\n");
+        discard_input_line();
+        return;
+    }
+    discard_input_line();
+
+    students[student_count++] = student;
+    if (save_students()) printf("Student added and saved.\n");
+}
+
+static void list_students(void) {
+    if (student_count == 0) {
+        printf("No student records yet.\n");
+        return;
+    }
+
+    printf("\n%-12s %-30s %s\n", "Roll number", "Name", "Marks");
+    printf("----------------------------------------------------------\n");
+    for (int i = 0; i < student_count; i++) {
+        printf("%-12d %-30s %.2f\n", students[i].roll_number,
+               students[i].name, students[i].marks);
+    }
+}
+
+static void search_student(void) {
+    int roll_number;
+    printf("Enter roll number to search: ");
+    if (scanf("%d", &roll_number) != 1) {
+        printf("Please enter a valid whole number.\n");
+        discard_input_line();
+        return;
+    }
+    discard_input_line();
+
+    int index = find_student_index(roll_number);
+    if (index == -1) {
+        printf("No student found with roll number %d.\n", roll_number);
+    } else {
+        printf("Roll number: %d\nName: %s\nMarks: %.2f\n",
+               students[index].roll_number, students[index].name,
+               students[index].marks);
+    }
+}
+
+static void update_student(void) {
+    int roll_number;
+    printf("Enter roll number to update: ");
+    if (scanf("%d", &roll_number) != 1) {
+        printf("Please enter a valid whole number.\n");
+        discard_input_line();
+        return;
+    }
+    discard_input_line();
+
+    int index = find_student_index(roll_number);
+    if (index == -1) {
+        printf("No student found with that roll number.\n");
+        return;
+    }
+
+    char new_name[NAME_LENGTH];
+    float new_marks;
+    printf("Enter new name (press Enter to keep '%s'): ", students[index].name);
+    if (fgets(new_name, sizeof(new_name), stdin) == NULL) return;
+    new_name[strcspn(new_name, "\n")] = '\0';
+
+    printf("Enter new marks (-1 to keep %.2f): ", students[index].marks);
+    if (scanf("%f", &new_marks) != 1 || new_marks < -1 || new_marks > 100) {
+        printf("Please enter -1 or a mark from 0 to 100.\n");
+        discard_input_line();
+        return;
+    }
+    discard_input_line();
+
+    if (new_name[0] != '\0') {
+        strncpy(students[index].name, new_name, NAME_LENGTH - 1);
+        students[index].name[NAME_LENGTH - 1] = '\0';
+    }
+    if (new_marks >= 0) students[index].marks = new_marks;
+    if (save_students()) printf("Student record updated and saved.\n");
+}
+
+static void delete_student(void) {
+    int roll_number;
+    printf("Enter roll number to delete: ");
+    if (scanf("%d", &roll_number) != 1) {
+        printf("Please enter a valid whole number.\n");
+        discard_input_line();
+        return;
+    }
+    discard_input_line();
+
+    int index = find_student_index(roll_number);
+    if (index == -1) {
+        printf("No student found with that roll number.\n");
+        return;
+    }
+
+    for (int i = index; i < student_count - 1; i++) students[i] = students[i + 1];
+    student_count--;
+    if (save_students()) printf("Student record deleted and saved.\n");
+}
+
+int main(void) {
+    load_students();
+    printf("Student Record Manager (%d saved record%s loaded)\n",
+           student_count, student_count == 1 ? "" : "s");
+
+    int choice;
+    do {
+        printf("\n--- Menu ---\n");
+        printf("1. Add student\n2. List students\n3. Search by roll number\n");
+        printf("4. Update student\n5. Delete student\n0. Save and exit\n");
+        printf("Choose an option: ");
+
+        if (scanf("%d", &choice) != 1) {
+            printf("Please enter a menu number.\n");
+            discard_input_line();
+            continue;
+        }
+        discard_input_line();
+
+        switch (choice) {
+            case 1: add_student(); break;
+            case 2: list_students(); break;
+            case 3: search_student(); break;
+            case 4: update_student(); break;
+            case 5: delete_student(); break;
+            case 0:
+                if (save_students()) printf("Records saved. Goodbye!\n");
+                break;
+            default: printf("Choose one of the listed options.\n");
+        }
+    } while (choice != 0);
+
+    return 0;
+}
